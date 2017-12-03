@@ -1,0 +1,230 @@
+1.- Sumar la deuda de los personajes (muchos trigger?)
+
+
+2.- Sumar +1 al agregrar personaje a la casa
+
+CREATE OR REPLACE FUNCTION mas_integrante()
+RETURNS trigger AS '
+BEGIN
+  update casa set
+    integrantes = integrantes + 1 where new.Nombre_casa = casa.nombre_casa and new.vivo_o_muerto = true;
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql'
+
+
+CREATE TRIGGER adicion
+     AFTER INSERT ON personaje
+     FOR EACH ROW
+     EXECUTE PROCEDURE mas_integrante();
+
+
+3.- Asesinar personajes (-1)... ademas de otra cosa... tg
+
+CREATE OR REPLACE FUNCTION matar()
+RETURNS trigger AS '
+BEGIN
+	if (new.vivo_o_muerto = true) then
+	update casa set integrantes = integrantes + 1 where new.nombre_casa = casa.nombre_casa;
+		if (new.nombre_casa != old.nombre_casa) then
+			update casa set integrantes = integrantes - 1 where old.nombre_casa = casa.nombre_casa;
+		end if;
+	return new;
+else
+  update casa set
+    integrantes = integrantes -1 where new.Nombre_casa = casa.nombre_casa and new.vivo_o_muerto = false;
+  RETURN NEW;
+END IF;
+  END;' LANGUAGE 'plpgsql'
+
+
+CREATE TRIGGER asesinato
+     BEFORE update ON personaje
+     FOR EACH ROW
+     EXECUTE PROCEDURE matar();
+
+
+
+UPDATE personaje SET nombre_personaje = '$new', dinero = $din, vivo_o_muerto = 'false',
+      nombre_profesion = '$prof', nombre_casa = '$casa', nombre_raza = '$raza'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ESO DEL INTERES DEJA LA CAGA, TALVES SOLO PONER LOS VALORES Y NO EL INTERES
+4.- Ver si se puede pedir el prestamos en el banco por una casa y añadir la deuda a la casa
+
+
+CREATE OR REPLACE FUNCTION revisar_prestamo()
+RETURNS trigger AS '
+BEGIN
+	if (new.monto_original > floor(casa.dinero * 0.7)) from casa where casa.nombre_casa = new.nombre_casa then
+        return null;
+    else
+  update casa set dinero = dinero + new.monto_original 
+  	where casa.nombre_casa = new.nombre_casa;
+  update casa set deuda_bancaria = floor((new.monto_original * 1.25) + new.monto_original * 
+  	(0.05 * floor(DATE_PART(''day'', current_timestamp::timestamp - ''2011/11/28''::timestamp) / 365) ))
+  	where casa.nombre_casa = new.nombre_casa;
+    end if;
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql'
+
+
+CREATE TRIGGER prestamos_banco
+     BEFORE INSERT ON transacciones_banco
+     FOR EACH ROW
+     EXECUTE PROCEDURE revisar_prestamo();
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+5.- Si el monto pedido por el pj1 al pj2 es mayor que lo que tiene entonces la transaccion no se hace
+
+CREATE OR REPLACE FUNCTION transaccion_pp()
+RETURNS trigger AS '
+BEGIN
+	if (new.monto > personaje.dinero and personaje.vivo_o_muerto = true ) from personaje 
+    	where personaje.nombre_personaje = new.nombre_personaje2 then
+        return null;
+    else
+    ALTER TABLE Personaje DISABLE TRIGGER ALL;
+	update personaje set deuda_actual = deuda_actual + new.monto 
+    	where personaje.nombre_personaje = new.nombre_personaje1;
+    update personaje set dinero = dinero + new.monto
+    	where personaje.nombre_personaje = new.nombre_personaje1;
+    update personaje set dinero = dinero - new.monto
+    	where personaje.nombre_personaje = new.nombre_personaje2;
+    ALTER TABLE Personaje ENABLE TRIGGER ALL;
+    end if;
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql'
+
+CREATE TRIGGER trans_pp
+     BEFORE INSERT ON transaccion_personajes
+     FOR EACH ROW
+     EXECUTE PROCEDURE transaccion_pp();
+
+
+6.- Transacciones casa
+
+CREATE OR REPLACE FUNCTION transaccion_cc()
+RETURNS trigger AS '
+BEGIN
+	if (new.monto > casa.dinero) from casa where casa.nombre_casa = new.nombre_casa2 then
+        return null;
+    else
+    update casa set dinero = dinero - new.monto
+    	where casa.nombre_casa = new.nombre_casa2;
+    update casa set dinero = dinero + new.monto
+    	where casa.nombre_casa = new.nombre_casa1;
+    end if;
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql';
+
+CREATE TRIGGER trans_cc
+     BEFORE INSERT ON transaccion_casa
+     FOR EACH ROW
+     EXECUTE PROCEDURE transaccion_cc();
+
+
+7.- Transacciones casa personaje -- la casa le da dinero al pj
+
+CREATE OR REPLACE FUNCTION transaccion_cp()
+RETURNS trigger AS '
+BEGIN
+	if (new.monto > casa.dinero) from casa where casa.nombre_casa = new.nombre_casa then
+        return null;
+    else
+    ALTER TABLE Personaje DISABLE TRIGGER ALL;
+	update casa set dinero = dinero - new.monto 
+    	where casa.nombre_casa = new.nombre_casa;
+    update personaje set dinero = dinero + new.monto
+    	where personaje.nombre_personaje = new.nombre_personaje;
+    ALTER TABLE Personaje ENABLE TRIGGER ALL;
+    end if;
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql'
+
+CREATE TRIGGER trans_cp
+     BEFORE INSERT ON transaccion_p_c
+     FOR EACH ROW
+     EXECUTE PROCEDURE transaccion_cp();
+
+
+
+
+8.- Pagar transaccion_pp más antigua primero y que se posea dinero para ello
+
+
+
+CREATE TRIGGER pago_pp
+     BEFORE INSERT ON transaccion_personajes
+     FOR EACH ROW
+     EXECUTE PROCEDURE pagar_pp();
+
+
+9.- Revisar si ya existe una transaccion casa-banco y no esta pagada 
+
+CREATE OR REPLACE FUNCTION transaccion_cp()
+RETURNS trigger AS '
+BEGIN
+
+    
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql'
+
+
+
+CREATE TRIGGER revision_banco_casa
+     BEFORE INSERT ON transaccion_personajes
+     FOR EACH ROW
+     EXECUTE PROCEDURE revision_bc();
+
+
+
+
+
+10.- ponerle a casa un lider
+
+Select * from personaje
+Select * from casa order by nombre_casa
+
+select nombre_personaje from personaje where nombre_casa = 'Algo'
+
+update casa set nombre_lider = 'Nombre personaje 2' where nombre_casa = 'Nombre casa 1'
+
+update casa set nombre_lider = null where nombre_casa = 'Nombre casa 3'
+update casa set nombre_lider = 'Nombre personaje 3' where nombre_casa = 'Nombre casa 3'
+
+update casa set integrantes = 1 where nombre_casa = 'Nombre casa 7'
+
+CREATE OR REPLACE FUNCTION lider_casa()
+RETURNS trigger AS '
+BEGIN
+	if (new.nombre_lider is null) then
+    	return new;
+    else
+    	if (SELECT CASE WHEN EXISTS (SELECT * FROM personaje WHERE new.nombre_lider = 
+        		(Select nombre_personaje from personaje where personaje.nombre_casa = new.nombre_casa))
+        		THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END) then
+            return new;
+        else
+            if () then
+            else
+            end if;
+        	update casa set integrantes = integrantes -1 where nombre_casa = 
+            	(Select nombre_casa from personaje );
+            if (SELECT CASE WHEN EXISTS (SELECT * FROM personaje WHERE nombre_personaje = )
+        			THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END ) then
+            	update casa set nombre_lider = null where nombre_casa = ;
+            end if;
+            update casa set integrantes = integrantes + 1 where casa.nombre_casa = new.nombre_casa;
+            return new;
+        end if;
+    end if;
+  RETURN NEW;
+  END;' LANGUAGE 'plpgsql'
+
+drop trigger lider on casa
+
+CREATE TRIGGER lider
+     AFTER UPDATE ON casa
+     FOR EACH ROW
+     WHEN (pg_trigger_depth() = 0)
+     EXECUTE PROCEDURE lider_casa();
