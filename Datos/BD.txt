@@ -1,0 +1,7 @@
+- Los int de 10 se cambiaron a bigint por paja nomas
+- Vivo_o_muerto lo cambie a bool
+- Estado_de_pago cambie a bool
+- La mayoria de las cosas ahora es not null
+- Volumenes libros cambiado a smallint
+- Las transacciones tienen un nro de serie, ademas el primero de la pk le pide al segundo
+
